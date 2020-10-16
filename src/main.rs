@@ -6,8 +6,14 @@ const ARENA_HEIGHT: u32 = 40;
 const ARENA_WIDTH: u32 = 40;
 
 struct HeadMaterial(Handle<ColorMaterial>);
+struct SegmentMaterial(Handle<ColorMaterial>);
 struct SnakeHead {
     direction: Direction,
+    next_segment: Entity,
+}
+#[derive(Default)]
+struct SnakeSegment {
+    next_segment: Option<Entity>,
 }
 struct SnakeMoveTimer(Timer);
 
@@ -54,20 +60,40 @@ fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
     commands.insert_resource(HeadMaterial(
         materials.add(Color::rgb(0.7, 0.7, 0.7).into()),
     ));
+    commands.insert_resource(SegmentMaterial(
+        materials.add(Color::rgb(0.3, 0.3, 0.3).into()),
+    ));
 }
 
-fn game_setup(mut commands: Commands, head_material: Res<HeadMaterial>) {
+fn game_setup(
+    mut commands: Commands,
+    head_material: Res<HeadMaterial>,
+    segment_material: Res<SegmentMaterial>,
+) {
+    spawn_segment(&mut commands, segment_material.0, Position { x: 10, y: 9 });
+    let first_segment = commands.current_entity().unwrap();
     commands
         .spawn(SpriteComponents {
             material: head_material.0,
-            sprite: Sprite::new(Vec2::new(10.0, 10.0)),
             ..Default::default()
         })
         .with(SnakeHead {
             direction: Direction::Up,
+            next_segment: first_segment,
         })
         .with(Position { x: 10, y: 10 })
         .with(Size::square(0.8));
+}
+
+fn spawn_segment(commands: &mut Commands, material: Handle<ColorMaterial>, position: Position) {
+    commands
+        .spawn(SpriteComponents {
+            material,
+            ..Default::default()
+        })
+        .with(SnakeSegment { next_segment: None })
+        .with(position)
+        .with(Size::square(0.65));
 }
 
 fn snake_movement(
