@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy::render::pass::ClearColor;
+use rand::prelude::random;
 use std::time::Duration;
 
 const ARENA_HEIGHT: u32 = 40;
@@ -16,6 +17,10 @@ struct SnakeSegment {
     next_segment: Option<Entity>,
 }
 struct SnakeMoveTimer(Timer);
+
+struct FoodSpawnTimer(Timer);
+struct FoodMaterial(Handle<ColorMaterial>);
+struct Food;
 
 #[derive(PartialEq, Copy, Clone, Debug)]
 enum Direction {
@@ -62,6 +67,9 @@ fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
     ));
     commands.insert_resource(SegmentMaterial(
         materials.add(Color::rgb(0.3, 0.3, 0.3).into()),
+    ));
+    commands.insert_resource(FoodMaterial(
+        materials.add(Color::rgb(1.0, 0.0, 1.0).into()),
     ));
 }
 
@@ -154,6 +162,28 @@ fn snake_movement(
     }
 }
 
+fn food_spawner(
+    mut commands: Commands,
+    food_material: Res<FoodMaterial>,
+    time: Res<Time>,
+    mut timer: ResMut<FoodSpawnTimer>,
+) {
+    timer.0.tick(time.delta_seconds);
+    if timer.0.finished {
+        commands
+            .spawn(SpriteComponents {
+                material: food_material.0,
+                ..Default::default()
+            })
+            .with(Food)
+            .with(Position {
+                x: (random::<f32>() * ARENA_WIDTH as f32) as i32,
+                y: (random::<f32>() * ARENA_HEIGHT as f32) as i32,
+            })
+            .with(Size::square(0.8));
+    }
+}
+
 fn size_scaling(windows: Res<Windows>, mut q: Query<(&Size, &mut Sprite)>) {
     for (size, mut sprite) in &mut q.iter() {
         let window = windows.get_primary().unwrap();
@@ -197,6 +227,11 @@ fn main() {
         .add_system(snake_movement.system())
         .add_system(position_translation.system())
         .add_system(size_scaling.system())
+        .add_resource(FoodSpawnTimer(Timer::new(
+            Duration::from_millis(1000),
+            true,
+        )))
+        .add_system(food_spawner.system())
         .add_default_plugins()
         .run();
 }
