@@ -22,6 +22,8 @@ struct FoodSpawnTimer(Timer);
 struct FoodMaterial(Handle<ColorMaterial>);
 struct Food;
 
+struct GameOverEvent;
+
 #[derive(PartialEq, Copy, Clone, Debug)]
 enum Direction {
     Left,
@@ -78,19 +80,7 @@ fn game_setup(
     head_material: Res<HeadMaterial>,
     segment_material: Res<SegmentMaterial>,
 ) {
-    spawn_segment(&mut commands, segment_material.0, Position { x: 10, y: 9 });
-    let first_segment = commands.current_entity().unwrap();
-    commands
-        .spawn(SpriteComponents {
-            material: head_material.0,
-            ..Default::default()
-        })
-        .with(SnakeHead {
-            direction: Direction::Up,
-            next_segment: first_segment,
-        })
-        .with(Position { x: 10, y: 10 })
-        .with(Size::square(0.8));
+    spawn_initial_snake(commands, head_material.0, segment_material.0);
 }
 
 fn spawn_segment(commands: &mut Commands, material: Handle<ColorMaterial>, position: Position) {
@@ -104,11 +94,32 @@ fn spawn_segment(commands: &mut Commands, material: Handle<ColorMaterial>, posit
         .with(Size::square(0.65));
 }
 
+fn spawn_initial_snake(
+    mut commands: Commands,
+    head_material: Handle<ColorMaterial>,
+    segment_material: Handle<ColorMaterial>,
+) {
+    spawn_segment(&mut commands, segment_material, Position { x: 10, y: 9 });
+    let first_segment = commands.current_entity().unwrap();
+    commands
+        .spawn(SpriteComponents {
+            material: head_material,
+            ..Default::default()
+        })
+        .with(SnakeHead {
+            direction: Direction::Up,
+            next_segment: first_segment,
+        })
+        .with(Position { x: 10, y: 10 })
+        .with(Size::square(0.8));
+}
+
 fn snake_movement(
     mut commands: Commands,
     time: Res<Time>,
     keyboard_input: Res<Input<KeyCode>>,
     mut snake_timer: ResMut<SnakeMoveTimer>,
+    mut game_over_events: ResMut<Events<GameOverEvent>>,
     mut segment_material: Res<SegmentMaterial>,
     mut head_positions: Query<(&mut SnakeHead, &mut Position)>,
     segments: Query<&mut SnakeSegment>,
@@ -134,11 +145,21 @@ fn snake_movement(
             head.direction = dir;
         }
         if snake_timer.0.finished {
+            if head_pos.x < 0
+                || head_pos.y < 0
+                || head_pos.x as u32 > ARENA_WIDTH
+                || head_pos.y as u32 > ARENA_HEIGHT
+            {
+                game_over_events.send(GameOverEvent);
+            }
             let mut last_position = *head_pos;
             let mut segment_entity = head.next_segment;
             loop {
                 let segment = segments.get::<SnakeSegment>(segment_entity).unwrap();
                 let mut segment_position = positions.get_mut::<Position>(segment_entity).unwrap();
+                if *head_pos == *segment_position {
+                    game_over_events.send(GameOverEvent);
+                }
                 std::mem::swap(&mut last_position, &mut *segment_position);
                 if let Some(n) = segment.next_segment {
                     segment_entity = n;
@@ -171,6 +192,30 @@ fn snake_movement(
                 }
             }
         }
+    }
+}
+
+fn game_over_system(
+    mut commands: Commands,
+    mut reader: Local<EventReader<GameOverEvent>>,
+    game_over_events: Res<Events<GameOverEvent>>,
+    segment_material: Res<SegmentMaterial>,
+    head_material: Res<HeadMaterial>,
+    mut segments: Query<(Entity, &SnakeSegment)>,
+    mut food: Query<(Entity, &Food)>,
+    mut heads: Query<(Entity, &SnakeHead)>,
+) {
+    if reader.iter(&game_over_events).next().is_some() {
+        for (ent, _segment) in &mut segments.iter() {
+            commands.despawn(ent);
+        }
+        for (ent, _food) in &mut food.iter() {
+            commands.despawn(ent);
+        }
+        for (ent, _head) in &mut heads.iter() {
+            commands.despawn(ent);
+        }
+        spawn_initial_snake(commands, head_material.0, segment_material.0);
     }
 }
 
@@ -233,6 +278,7 @@ fn main() {
             Duration::from_millis(150. as u64),
             true,
         )))
+        .add_event::<GameOverEvent>()
         .add_startup_system(setup.system())
         .add_startup_stage("game_setup")
         .add_startup_system_to_stage("game_setup", game_setup.system())
@@ -244,6 +290,7 @@ fn main() {
             true,
         )))
         .add_system(food_spawner.system())
+        .add_system(game_over_system.system())
         .add_default_plugins()
         .run();
 }
