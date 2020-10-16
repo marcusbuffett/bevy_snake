@@ -101,6 +101,8 @@ fn snake_movement(
     keyboard_input: Res<Input<KeyCode>>,
     mut snake_timer: ResMut<SnakeMoveTimer>,
     mut head_positions: Query<(&mut SnakeHead, &mut Position)>,
+    segments: Query<&mut SnakeSegment>,
+    positions: Query<&mut Position>,
 ) {
     snake_timer.0.tick(time.delta_seconds);
     for (mut head, mut head_pos) in &mut head_positions.iter() {
@@ -121,6 +123,18 @@ fn snake_movement(
             head.direction = dir;
         }
         if snake_timer.0.finished {
+            let mut last_position = *head_pos;
+            let mut segment_entity = head.next_segment;
+            loop {
+                let segment = segments.get::<SnakeSegment>(segment_entity).unwrap();
+                let mut segment_position = positions.get_mut::<Position>(segment_entity).unwrap();
+                std::mem::swap(&mut last_position, &mut *segment_position);
+                if let Some(n) = segment.next_segment {
+                    segment_entity = n;
+                } else {
+                    break;
+                }
+            }
             match &head.direction {
                 Direction::Left => {
                     head_pos.x -= 1;
