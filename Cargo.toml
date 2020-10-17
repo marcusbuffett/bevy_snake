@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 bevy = "0.2.1"
-rand = "*"
+rand = "0.7.3"
 
 [profile.dev]
 # opt-level = 1               # Use slightly better optimizations.
