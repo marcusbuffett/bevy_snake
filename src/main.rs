@@ -1,11 +1,34 @@
 use bevy::prelude::*;
 use bevy::render::pass::ClearColor;
+use std::time::Duration;
 
 const ARENA_HEIGHT: u32 = 40;
 const ARENA_WIDTH: u32 = 40;
 
 struct HeadMaterial(Handle<ColorMaterial>);
-struct SnakeHead;
+struct SnakeHead {
+    direction: Direction,
+}
+struct SnakeMoveTimer(Timer);
+
+#[derive(PartialEq, Copy, Clone, Debug)]
+enum Direction {
+    Left,
+    Up,
+    Right,
+    Down,
+}
+
+impl Direction {
+    fn opposite(self: &Self) -> Self {
+        match self {
+            Self::Left => Self::Right,
+            Self::Right => Self::Left,
+            Self::Up => Self::Down,
+            Self::Down => Self::Up,
+        }
+    }
+}
 
 #[derive(Default, Copy, Clone, Debug, Eq, PartialEq, Hash)]
 struct Position {
@@ -40,27 +63,53 @@ fn game_setup(mut commands: Commands, head_material: Res<HeadMaterial>) {
             sprite: Sprite::new(Vec2::new(10.0, 10.0)),
             ..Default::default()
         })
-        .with(SnakeHead)
+        .with(SnakeHead {
+            direction: Direction::Up,
+        })
         .with(Position { x: 10, y: 10 })
         .with(Size::square(0.8));
 }
 
 fn snake_movement(
+    time: Res<Time>,
     keyboard_input: Res<Input<KeyCode>>,
-    mut head_positions: Query<(&SnakeHead, &mut Position)>,
+    mut snake_timer: ResMut<SnakeMoveTimer>,
+    mut head_positions: Query<(&mut SnakeHead, &mut Position)>,
 ) {
-    for (_head, mut pos) in &mut head_positions.iter() {
+    snake_timer.0.tick(time.delta_seconds);
+    for (mut head, mut head_pos) in &mut head_positions.iter() {
+        let mut dir: Direction = head.direction;
         if keyboard_input.pressed(KeyCode::Left) {
-            pos.x -= 1;
-        }
-        if keyboard_input.pressed(KeyCode::Right) {
-            pos.x += 1;
+            dir = Direction::Left;
         }
         if keyboard_input.pressed(KeyCode::Down) {
-            pos.y -= 1;
+            dir = Direction::Down;
         }
         if keyboard_input.pressed(KeyCode::Up) {
-            pos.y += 1;
+            dir = Direction::Up;
+        }
+        if keyboard_input.pressed(KeyCode::Right) {
+            dir = Direction::Right;
+        }
+        if dir != head.direction.opposite() {
+            head.direction = dir;
+        }
+        if snake_timer.0.finished {
+            match &head.direction {
+                Direction::Left => {
+                    head_pos.x -= 1;
+                }
+                Direction::Right => {
+                    head_pos.x += 1;
+                }
+
+                Direction::Up => {
+                    head_pos.y += 1;
+                }
+                Direction::Down => {
+                    head_pos.y -= 1;
+                }
+            };
         }
     }
 }
@@ -98,6 +147,10 @@ fn main() {
             height: 2000,
             ..Default::default()
         })
+        .add_resource(SnakeMoveTimer(Timer::new(
+            Duration::from_millis(150. as u64),
+            true,
+        )))
         .add_startup_system(setup.system())
         .add_startup_stage("game_setup")
         .add_startup_system_to_stage("game_setup", game_setup.system())
