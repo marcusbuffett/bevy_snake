@@ -46,20 +46,20 @@ fn game_setup(mut commands: Commands, head_material: Res<HeadMaterial>) {
 
 fn snake_movement(
     keyboard_input: Res<Input<KeyCode>>,
-    mut head_positions: Query<(&SnakeHead, &mut Transform)>,
+    mut head_positions: Query<(&SnakeHead, &mut Position)>,
 ) {
-    for (_head, mut transform) in &mut head_positions.iter() {
+    for (_head, mut pos) in &mut head_positions.iter() {
         if keyboard_input.pressed(KeyCode::Left) {
-            *transform.translation_mut().x_mut() -= 10.;
+            pos.x -= 1;
         }
         if keyboard_input.pressed(KeyCode::Right) {
-            *transform.translation_mut().x_mut() += 10.;
+            pos.x += 1;
         }
         if keyboard_input.pressed(KeyCode::Down) {
-            *transform.translation_mut().y_mut() -= 10.;
+            pos.y -= 1;
         }
         if keyboard_input.pressed(KeyCode::Up) {
-            *transform.translation_mut().y_mut() += 10.;
+            pos.y += 1;
         }
     }
 }
