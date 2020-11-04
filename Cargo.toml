@@ -3,3 +3,7 @@ name = "bevy_snake"
 version = "0.2.0"
 authors = ["Marcus Buffett <marcusbuffett@me.com>"]
 edition = "2018"
+
+[dependencies]
+bevy = "0.4.0"
+rand = "0.7.3"
