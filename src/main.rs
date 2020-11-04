@@ -1,6 +1,28 @@
 #![warn(clippy::complexity)]
 use bevy::prelude::*;
 
+const ARENA_HEIGHT: u32 = 10;
+const ARENA_WIDTH: u32 = 10;
+
+#[derive(Default, Copy, Clone, Eq, PartialEq, Hash)]
+struct Position {
+    x: i32,
+    y: i32,
+}
+
+struct Size {
+    width: f32,
+    height: f32,
+}
+impl Size {
+    pub fn square(x: f32) -> Self {
+        Self {
+            width: x,
+            height: x,
+        }
+    }
+}
+
 struct SnakeHead;
 struct Materials {
     head_material: Handle<ColorMaterial>,
@@ -20,7 +42,9 @@ fn game_setup(mut commands: Commands, materials: Res<Materials>) {
             sprite: Sprite::new(Vec2::new(10.0, 10.0)),
             ..Default::default()
         })
-        .with(SnakeHead);
+        .with(SnakeHead)
+        .with(Position { x: 3, y: 3 })
+        .with(Size::square(0.8));
 }
 
 fn snake_movement(
@@ -43,12 +67,38 @@ fn snake_movement(
     }
 }
 
+fn size_scaling(windows: Res<Windows>, mut q: Query<(&Size, &mut Sprite)>) {
+    for (size, mut sprite) in q.iter_mut() {
+        let window = windows.get_primary().unwrap();
+        sprite.size = Vec2::new(
+            size.width as f32 / ARENA_WIDTH as f32 * window.width() as f32,
+            size.height as f32 / ARENA_HEIGHT as f32 * window.height() as f32,
+        );
+    }
+}
+
+fn position_translation(windows: Res<Windows>, mut q: Query<(&Position, &mut Transform)>) {
+    fn convert(p: f32, bound_window: f32, bound_game: f32) -> f32 {
+        p / bound_game * bound_window - (bound_window / 2.) + (bound_window / bound_game / 2.)
+    }
+    let window = windows.get_primary().unwrap();
+    for (pos, mut transform) in q.iter_mut() {
+        transform.translation = Vec3::new(
+            convert(pos.x as f32, window.width() as f32, ARENA_WIDTH as f32),
+            convert(pos.y as f32, window.height() as f32, ARENA_HEIGHT as f32),
+            0.0,
+        );
+    }
+}
+
 fn main() {
     App::build()
         .add_startup_system(setup.system())
         .add_startup_stage("game_setup")
         .add_startup_system_to_stage("game_setup", game_setup.system())
         .add_system(snake_movement.system())
+        .add_system(position_translation.system())
+        .add_system(size_scaling.system())
         .add_plugins(DefaultPlugins)
         .run();
 }
