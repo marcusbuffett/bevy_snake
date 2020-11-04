@@ -1,5 +1,6 @@
 #![warn(clippy::complexity)]
 use bevy::prelude::*;
+use bevy::render::pass::ClearColor;
 
 const ARENA_HEIGHT: u32 = 10;
 const ARENA_WIDTH: u32 = 10;
@@ -93,6 +94,13 @@ fn position_translation(windows: Res<Windows>, mut q: Query<(&Position, &mut Tra
 
 fn main() {
     App::build()
+        .add_resource(ClearColor(Color::rgb(0.04, 0.04, 0.04)))
+        .add_resource(WindowDescriptor {
+            title: "Snake!".to_string(),
+            width: 2000,
+            height: 2000,
+            ..Default::default()
+        })
         .add_startup_system(setup.system())
         .add_startup_stage("game_setup")
         .add_startup_system_to_stage("game_setup", game_setup.system())
