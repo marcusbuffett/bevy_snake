@@ -52,20 +52,20 @@ fn spawn_snake(mut commands: Commands) {
 
 fn snake_movement(
     keyboard_input: Res<Input<KeyCode>>,
-    mut head_positions: Query<&mut Transform, With<SnakeHead>>,
+    mut head_positions: Query<&mut Position, With<SnakeHead>>,
 ) {
-    for mut transform in head_positions.iter_mut() {
+    for mut pos in head_positions.iter_mut() {
         if keyboard_input.pressed(KeyCode::Left) {
-            transform.translation.x -= 2.;
+            pos.x -= 1;
         }
         if keyboard_input.pressed(KeyCode::Right) {
-            transform.translation.x += 2.;
+            pos.x += 1;
         }
         if keyboard_input.pressed(KeyCode::Down) {
-            transform.translation.y -= 2.;
+            pos.y -= 1;
         }
         if keyboard_input.pressed(KeyCode::Up) {
-            transform.translation.y += 2.;
+            pos.y += 1;
         }
     }
 }
