@@ -121,6 +121,7 @@ fn spawn_segment(
 fn snake_movement(
     keyboard_input: Res<Input<KeyCode>>,
     snake_timer: ResMut<SnakeMoveTimer>,
+    segments: ResMut<SnakeSegments>,
     mut heads: Query<(Entity, &mut SnakeHead)>,
     mut positions: Query<&mut Position>,
 ) {
@@ -143,6 +144,7 @@ fn snake_movement(
         if dir != head.direction.opposite() {
             head.direction = dir;
         }
+        let last_head_pos = *head_pos;
         match &head.direction {
             Direction::Left => {
                 head_pos.x -= 1;
@@ -157,6 +159,19 @@ fn snake_movement(
                 head_pos.y -= 1;
             }
         };
+        drop(head_pos);
+        let mut segment_positions: Vec<Position> = segments
+            .0
+            .iter()
+            .map(|e| *positions.get_mut(*e).unwrap())
+            .collect::<Vec<Position>>();
+        segment_positions.insert(0, last_head_pos);
+        segment_positions
+            .iter()
+            .zip(segments.0.iter())
+            .for_each(|(pos, segment)| {
+                *positions.get_mut(*segment).unwrap() = *pos;
+            });
     }
 }
 
