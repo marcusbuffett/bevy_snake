@@ -37,6 +37,7 @@ struct Materials {
 
 struct SnakeMoveTimer(Timer);
 
+struct GameOverEvent;
 struct GrowthEvent;
 
 #[derive(Default)]
@@ -131,6 +132,7 @@ fn spawn_segment(
 fn snake_movement(
     keyboard_input: Res<Input<KeyCode>>,
     snake_timer: ResMut<SnakeMoveTimer>,
+    mut game_over_events: ResMut<Events<GameOverEvent>>,
     mut last_tail_position: ResMut<LastTailPosition>,
     segments: ResMut<SnakeSegments>,
     mut heads: Query<(Entity, &mut SnakeHead)>,
@@ -174,6 +176,16 @@ fn snake_movement(
                 head_pos.y -= 1;
             }
         };
+        if head_pos.x < 0
+            || head_pos.y < 0
+            || head_pos.x as u32 >= ARENA_WIDTH
+            || head_pos.y as u32 >= ARENA_HEIGHT
+        {
+            game_over_events.send(GameOverEvent);
+        }
+        if segment_positions.contains(&head_pos) {
+            game_over_events.send(GameOverEvent);
+        }
         segment_positions
             .iter()
             .zip(segments.0.iter().skip(1))
@@ -181,6 +193,23 @@ fn snake_movement(
                 *positions.get_mut(*segment).unwrap() = *pos;
             });
         last_tail_position.0 = Some(*segment_positions.last().unwrap());
+    }
+}
+
+fn game_over(
+    mut commands: Commands,
+    mut reader: Local<EventReader<GameOverEvent>>,
+    game_over_events: Res<Events<GameOverEvent>>,
+    materials: Res<Materials>,
+    segments_res: ResMut<SnakeSegments>,
+    food: Query<With<Food, Entity>>,
+    segments: Query<With<SnakeSegment, Entity>>,
+) {
+    if reader.iter(&game_over_events).next().is_some() {
+        for ent in food.iter().chain(segments.iter()) {
+            commands.despawn(ent);
+        }
+        spawn_snake(commands, materials, segments_res);
     }
 }
 
@@ -288,6 +317,7 @@ fn main() {
         .add_resource(SnakeSegments::default())
         .add_resource(LastTailPosition::default())
         .add_event::<GrowthEvent>()
+        .add_event::<GameOverEvent>()
         .add_startup_system(setup.system())
         .add_startup_stage("game_setup")
         .add_startup_system_to_stage("game_setup", spawn_snake.system())
@@ -296,6 +326,7 @@ fn main() {
         .add_system(snake_eating.system())
         .add_system(snake_growth.system())
         .add_system(food_spawner.system())
+        .add_system(game_over.system())
         .add_system(position_translation.system())
         .add_system(size_scaling.system())
         .add_plugins(DefaultPlugins)
