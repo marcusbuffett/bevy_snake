@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 use bevy::render::pass::ClearColor;
+use rand::prelude::random;
+use std::time::Duration;
 
 const ARENA_HEIGHT: u32 = 10;
 const ARENA_WIDTH: u32 = 10;
@@ -26,12 +28,23 @@ impl Size {
 struct SnakeHead;
 struct Materials {
     head_material: Handle<ColorMaterial>,
+    food_material: Handle<ColorMaterial>,
+}
+
+struct Food;
+
+struct FoodSpawnTimer(Timer);
+impl Default for FoodSpawnTimer {
+    fn default() -> Self {
+        Self(Timer::new(Duration::from_millis(1000), true))
+    }
 }
 
 fn setup(commands: &mut Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
     commands.spawn(Camera2dBundle::default());
     commands.insert_resource(Materials {
         head_material: materials.add(Color::rgb(0.7, 0.7, 0.7).into()),
+        food_material: materials.add(Color::rgb(1.0, 0.0, 1.0).into()),
     });
 }
 
@@ -92,6 +105,27 @@ fn position_translation(windows: Res<Windows>, mut q: Query<(&Position, &mut Tra
     }
 }
 
+fn food_spawner(
+    commands: &mut Commands,
+    materials: Res<Materials>,
+    time: Res<Time>,
+    mut timer: Local<FoodSpawnTimer>,
+) {
+    if timer.0.tick(time.delta_seconds()).finished() {
+        commands
+            .spawn(SpriteBundle {
+                material: materials.food_material.clone(),
+                ..Default::default()
+            })
+            .with(Food)
+            .with(Position {
+                x: (random::<f32>() * ARENA_WIDTH as f32) as i32,
+                y: (random::<f32>() * ARENA_HEIGHT as f32) as i32,
+            })
+            .with(Size::square(0.8));
+    }
+}
+
 fn main() {
     App::build()
         .add_resource(ClearColor(Color::rgb(0.04, 0.04, 0.04)))
@@ -104,6 +138,7 @@ fn main() {
         .add_startup_system(setup.system())
         .add_startup_stage("game_setup", SystemStage::single(spawn_snake.system()))
         .add_system(snake_movement.system())
+        .add_system(food_spawner.system())
         .add_system(position_translation.system())
         .add_system(size_scaling.system())
         .add_plugins(DefaultPlugins)
