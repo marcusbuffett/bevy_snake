@@ -113,23 +113,23 @@ fn snake_movement(
     mut heads: Query<(Entity, &mut SnakeHead, &SnakeSegment, &Position)>,
     segment_positions: Query<With<SnakeSegment, &Position>>,
 ) {
-    if !snake_timer.0.finished {
-        return;
-    }
     for (head_entity, mut head, head_segment, head_pos) in heads.iter_mut() {
-        let dir: Direction = if keyboard_input.pressed(KeyCode::Left) {
+        let dir: Direction = if keyboard_input.just_pressed(KeyCode::Left) {
             Direction::Left
-        } else if keyboard_input.pressed(KeyCode::Down) {
+        } else if keyboard_input.just_pressed(KeyCode::Down) {
             Direction::Down
-        } else if keyboard_input.pressed(KeyCode::Up) {
+        } else if keyboard_input.just_pressed(KeyCode::Up) {
             Direction::Up
-        } else if keyboard_input.pressed(KeyCode::Right) {
+        } else if keyboard_input.just_pressed(KeyCode::Right) {
             Direction::Right
         } else {
             head.direction
         };
         if dir != head.direction.opposite() {
             head.direction = dir;
+        }
+        if !snake_timer.0.finished {
+            continue;
         }
 
         let new_pos = {
