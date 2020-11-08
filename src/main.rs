@@ -29,6 +29,7 @@ impl Size {
 struct SnakeHead {
     direction: Direction,
 }
+
 struct Materials {
     head_material: Handle<ColorMaterial>,
     segment_material: Handle<ColorMaterial>,
