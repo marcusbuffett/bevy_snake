@@ -1,3 +1,4 @@
+#![warn(clippy::complexity)]
 use bevy::prelude::*;
 use bevy::render::pass::ClearColor;
 use rand::prelude::random;
@@ -74,8 +75,8 @@ impl Direction {
     }
 }
 
-fn setup(commands: &mut Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
-    commands.spawn(Camera2dBundle::default());
+fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
+    commands.spawn(Camera2dComponents::default());
     commands.insert_resource(Materials {
         head_material: materials.add(Color::rgb(0.7, 0.7, 0.7).into()),
         segment_material: materials.add(Color::rgb(0.3, 0.3, 0.3).into()),
@@ -84,13 +85,13 @@ fn setup(commands: &mut Commands, mut materials: ResMut<Assets<ColorMaterial>>) 
 }
 
 fn spawn_snake(
-    commands: &mut Commands,
+    mut commands: Commands,
     materials: Res<Materials>,
     mut segments: ResMut<SnakeSegments>,
 ) {
     segments.0 = vec![
         commands
-            .spawn(SpriteBundle {
+            .spawn(SpriteComponents {
                 material: materials.head_material.clone(),
                 sprite: Sprite::new(Vec2::new(10.0, 10.0)),
                 ..Default::default()
@@ -104,7 +105,7 @@ fn spawn_snake(
             .current_entity()
             .unwrap(),
         spawn_segment(
-            commands,
+            &mut commands,
             &materials.segment_material,
             Position { x: 3, y: 2 },
         ),
@@ -117,9 +118,9 @@ fn spawn_segment(
     position: Position,
 ) -> Entity {
     commands
-        .spawn(SpriteBundle {
+        .spawn(SpriteComponents {
             material: material.clone(),
-            ..Default::default()
+            ..SpriteComponents::default()
         })
         .with(SnakeSegment)
         .with(position)
@@ -158,7 +159,7 @@ fn snake_movement(
         if dir != head.direction.opposite() {
             head.direction = dir;
         }
-        if !snake_timer.0.finished() {
+        if !snake_timer.0.finished {
             return;
         }
         match &head.direction {
@@ -196,13 +197,13 @@ fn snake_movement(
 }
 
 fn game_over(
-    commands: &mut Commands,
+    mut commands: Commands,
     mut reader: Local<EventReader<GameOverEvent>>,
     game_over_events: Res<Events<GameOverEvent>>,
     materials: Res<Materials>,
     segments_res: ResMut<SnakeSegments>,
-    food: Query<Entity, With<Food>>,
-    segments: Query<Entity, With<SnakeSegment>>,
+    food: Query<With<Food, Entity>>,
+    segments: Query<With<SnakeSegment, Entity>>,
 ) {
     if reader.iter(&game_over_events).next().is_some() {
         for ent in food.iter().chain(segments.iter()) {
@@ -213,13 +214,13 @@ fn game_over(
 }
 
 fn snake_eating(
-    commands: &mut Commands,
+    mut commands: Commands,
     snake_timer: ResMut<SnakeMoveTimer>,
     mut growth_events: ResMut<Events<GrowthEvent>>,
-    food_positions: Query<(Entity, &Position), With<Food>>,
-    head_positions: Query<&Position, With<SnakeHead>>,
+    food_positions: Query<With<Food, (Entity, &Position)>>,
+    head_positions: Query<With<SnakeHead, &Position>>,
 ) {
-    if !snake_timer.0.finished() {
+    if !snake_timer.0.finished {
         return;
     }
     for head_pos in head_positions.iter() {
@@ -233,7 +234,7 @@ fn snake_eating(
 }
 
 fn snake_growth(
-    commands: &mut Commands,
+    mut commands: Commands,
     last_tail_position: Res<LastTailPosition>,
     growth_events: Res<Events<GrowthEvent>>,
     mut segments: ResMut<SnakeSegments>,
@@ -242,7 +243,7 @@ fn snake_growth(
 ) {
     if growth_reader.iter(&growth_events).next().is_some() {
         segments.0.push(spawn_segment(
-            commands,
+            &mut commands,
             &materials.segment_material,
             last_tail_position.0.unwrap(),
         ));
@@ -275,14 +276,15 @@ fn position_translation(windows: Res<Windows>, mut q: Query<(&Position, &mut Tra
 }
 
 fn food_spawner(
-    commands: &mut Commands,
+    mut commands: Commands,
     materials: Res<Materials>,
     time: Res<Time>,
     mut timer: Local<FoodSpawnTimer>,
 ) {
-    if timer.0.tick(time.delta_seconds()).finished() {
+    timer.0.tick(time.delta_seconds);
+    if timer.0.finished {
         commands
-            .spawn(SpriteBundle {
+            .spawn(SpriteComponents {
                 material: materials.food_material.clone(),
                 ..Default::default()
             })
@@ -296,7 +298,7 @@ fn food_spawner(
 }
 
 fn snake_timer(time: Res<Time>, mut snake_timer: ResMut<SnakeMoveTimer>) {
-    snake_timer.0.tick(time.delta_seconds());
+    snake_timer.0.tick(time.delta_seconds);
 }
 
 fn main() {
@@ -304,8 +306,8 @@ fn main() {
         .add_resource(ClearColor(Color::rgb(0.04, 0.04, 0.04)))
         .add_resource(WindowDescriptor {
             title: "Snake!".to_string(),
-            width: 500.0,
-            height: 500.0,
+            width: 2000,
+            height: 2000,
             ..Default::default()
         })
         .add_resource(SnakeMoveTimer(Timer::new(
@@ -317,7 +319,8 @@ fn main() {
         .add_event::<GrowthEvent>()
         .add_event::<GameOverEvent>()
         .add_startup_system(setup.system())
-        .add_startup_stage("game_setup", SystemStage::single(spawn_snake.system()))
+        .add_startup_stage("game_setup")
+        .add_startup_system_to_stage("game_setup", spawn_snake.system())
         .add_system(snake_timer.system())
         .add_system(snake_movement.system())
         .add_system(snake_eating.system())
