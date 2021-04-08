@@ -1,7 +1,7 @@
 use bevy::core::FixedTimestep;
 use bevy::prelude::*;
 use bevy::render::pass::ClearColor;
-use rand::prelude::random;
+use rand::Rng;
 
 const ARENA_HEIGHT: u32 = 10;
 const ARENA_WIDTH: u32 = 10;
@@ -266,6 +266,7 @@ fn position_translation(windows: Res<Windows>, mut q: Query<(&Position, &mut Tra
 }
 
 fn food_spawner(mut commands: Commands, materials: Res<Materials>) {
+    let mut rng = rand::thread_rng();
     commands
         .spawn_bundle(SpriteBundle {
             material: materials.food_material.clone(),
@@ -273,8 +274,8 @@ fn food_spawner(mut commands: Commands, materials: Res<Materials>) {
         })
         .insert(Food)
         .insert(Position {
-            x: (random::<f32>() * ARENA_WIDTH as f32) as i32,
-            y: (random::<f32>() * ARENA_HEIGHT as f32) as i32,
+            x: rng.gen_range(0..ARENA_WIDTH as i32),
+            y: rng.gen_range(0..ARENA_HEIGHT as i32),
         })
         .insert(Size::square(0.8));
 }
