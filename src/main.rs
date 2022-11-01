@@ -1,6 +1,6 @@
 use bevy::time::FixedTimestep;
 use bevy::prelude::*;
-use rand::prelude::random;
+use rand::Rng;
 
 const SNAKE_HEAD_COLOR: Color = Color::rgb(0.7, 0.7, 0.7);
 const FOOD_COLOR: Color = Color::rgb(1.0, 0.0, 0.0);
@@ -20,6 +20,7 @@ struct Size {
     width: f32,
     height: f32,
 }
+
 impl Size {
     pub fn square(x: f32) -> Self {
         Self {
@@ -33,6 +34,7 @@ impl Size {
 struct SnakeHead {
     direction: Direction,
 }
+
 struct GameOverEvent;
 struct GrowthEvent;
 
@@ -248,6 +250,7 @@ fn position_translation(windows: Res<Windows>, mut q: Query<(&Position, &mut Tra
 }
 
 fn food_spawner(mut commands: Commands) {
+    let mut rng = rand::thread_rng();
     commands
         .spawn_bundle(SpriteBundle {
             sprite: Sprite {
@@ -258,8 +261,8 @@ fn food_spawner(mut commands: Commands) {
         })
         .insert(Food)
         .insert(Position {
-            x: (random::<f32>() * ARENA_WIDTH as f32) as i32,
-            y: (random::<f32>() * ARENA_HEIGHT as f32) as i32,
+            x: rng.gen_range(0..ARENA_WIDTH as i32),
+            y: rng.gen_range(0..ARENA_HEIGHT as i32),
         })
         .insert(Size::square(0.8));
 }
