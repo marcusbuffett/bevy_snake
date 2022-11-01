@@ -1,9 +1,9 @@
-use bevy::core::FixedTimestep;
+use bevy::time::FixedTimestep;
 use bevy::prelude::*;
 use rand::prelude::random;
 
 const SNAKE_HEAD_COLOR: Color = Color::rgb(0.7, 0.7, 0.7);
-const FOOD_COLOR: Color = Color::rgb(1.0, 0.0, 1.0);
+const FOOD_COLOR: Color = Color::rgb(1.0, 0.0, 0.0);
 const SNAKE_SEGMENT_COLOR: Color = Color::rgb(0.3, 0.3, 0.3);
 
 const ARENA_HEIGHT: u32 = 10;
@@ -33,7 +33,6 @@ impl Size {
 struct SnakeHead {
     direction: Direction,
 }
-
 struct GameOverEvent;
 struct GrowthEvent;
 
@@ -69,7 +68,7 @@ impl Direction {
 }
 
 fn setup_camera(mut commands: Commands) {
-    commands.spawn_bundle(OrthographicCameraBundle::new_2d());
+    commands.spawn_bundle(Camera2dBundle::default());
 }
 
 fn spawn_snake(mut commands: Commands, mut segments: ResMut<SnakeSegments>) {
@@ -104,7 +103,7 @@ fn spawn_segment(mut commands: Commands, position: Position) -> Entity {
         })
         .insert(SnakeSegment)
         .insert(position)
-        .insert(Size::square(0.65))
+        .insert(Size::square(0.75))
         .id()
 }
 
@@ -217,7 +216,10 @@ fn snake_growth(
 }
 
 fn size_scaling(windows: Res<Windows>, mut q: Query<(&Size, &mut Transform)>) {
-    let window = windows.get_primary().unwrap();
+    let window = match windows.get_primary() {
+        Some(window) => window,
+        None => return,
+    };
     for (sprite_size, mut transform) in q.iter_mut() {
         transform.scale = Vec3::new(
             sprite_size.width / ARENA_WIDTH as f32 * window.width() as f32,
@@ -232,7 +234,10 @@ fn position_translation(windows: Res<Windows>, mut q: Query<(&Position, &mut Tra
         let tile_size = bound_window / bound_game;
         pos / bound_game * bound_window - (bound_window / 2.) + (tile_size / 2.)
     }
-    let window = windows.get_primary().unwrap();
+    let window = match windows.get_primary() {
+        Some(window) => window,
+        None => return,
+    };
     for (pos, mut transform) in q.iter_mut() {
         transform.translation = Vec3::new(
             convert(pos.x as f32, window.width() as f32, ARENA_WIDTH as f32),
@@ -266,6 +271,7 @@ fn main() {
             title: "Snake!".to_string(),
             width: 500.0,
             height: 500.0,
+            resizable: false,
             ..default()
         })
         .add_startup_system(setup_camera)

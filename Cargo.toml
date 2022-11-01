@@ -5,5 +5,11 @@ authors = ["Marcus Buffett <marcusbuffett@me.com>"]
 edition = "2021"
 
 [dependencies]
-bevy = "0.7.0"
-rand = "0.7.3"
+bevy = {version = "0.8", features = ["dynamic"]}
+rand = "0.8"
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
