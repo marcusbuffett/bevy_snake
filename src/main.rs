@@ -1,5 +1,5 @@
-use bevy::time::FixedTimestep;
 use bevy::prelude::*;
+use bevy::time::FixedTimestep;
 use rand::Rng;
 
 const SNAKE_HEAD_COLOR: Color = Color::rgb(0.7, 0.7, 0.7);
@@ -38,13 +38,13 @@ struct SnakeHead {
 struct GameOverEvent;
 struct GrowthEvent;
 
-#[derive(Default)]
+#[derive(Default, Resource)]
 struct LastTailPosition(Option<Position>);
 
 #[derive(Component)]
 struct SnakeSegment;
 
-#[derive(Default, Deref, DerefMut)]
+#[derive(Default, Deref, DerefMut, Resource)]
 struct SnakeSegments(Vec<Entity>);
 
 #[derive(Component)]
@@ -70,13 +70,13 @@ impl Direction {
 }
 
 fn setup_camera(mut commands: Commands) {
-    commands.spawn_bundle(Camera2dBundle::default());
+    commands.spawn(Camera2dBundle::default());
 }
 
 fn spawn_snake(mut commands: Commands, mut segments: ResMut<SnakeSegments>) {
     *segments = SnakeSegments(vec![
         commands
-            .spawn_bundle(SpriteBundle {
+            .spawn(SpriteBundle {
                 sprite: Sprite {
                     color: SNAKE_HEAD_COLOR,
                     ..default()
@@ -96,7 +96,7 @@ fn spawn_snake(mut commands: Commands, mut segments: ResMut<SnakeSegments>) {
 
 fn spawn_segment(mut commands: Commands, position: Position) -> Entity {
     commands
-        .spawn_bundle(SpriteBundle {
+        .spawn(SpriteBundle {
             sprite: Sprite {
                 color: SNAKE_SEGMENT_COLOR,
                 ..default()
@@ -252,7 +252,7 @@ fn position_translation(windows: Res<Windows>, mut q: Query<(&Position, &mut Tra
 fn food_spawner(mut commands: Commands) {
     let mut rng = rand::thread_rng();
     commands
-        .spawn_bundle(SpriteBundle {
+        .spawn(SpriteBundle {
             sprite: Sprite {
                 color: FOOD_COLOR,
                 ..default()
@@ -270,13 +270,16 @@ fn food_spawner(mut commands: Commands) {
 fn main() {
     App::new()
         .insert_resource(ClearColor(Color::rgb(0.04, 0.04, 0.04)))
-        .insert_resource(WindowDescriptor {
-            title: "Snake!".to_string(),
-            width: 500.0,
-            height: 500.0,
-            resizable: false,
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            window: WindowDescriptor {
+                title: "Snake!".to_string(),
+                width: 500.0,
+                height: 500.0,
+                resizable: false,
+                ..default()
+            },
             ..default()
-        })
+          }))
         .add_startup_system(setup_camera)
         .add_startup_system(spawn_snake)
         .insert_resource(SnakeSegments::default())
