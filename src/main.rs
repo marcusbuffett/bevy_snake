@@ -279,7 +279,7 @@ fn main() {
                 ..default()
             },
             ..default()
-          }))
+        }))
         .add_startup_system(setup_camera)
         .add_startup_system(spawn_snake)
         .insert_resource(SnakeSegments::default())
@@ -306,6 +306,5 @@ fn main() {
                 .with_system(position_translation)
                 .with_system(size_scaling),
         )
-        .add_plugins(DefaultPlugins)
         .run();
 }
