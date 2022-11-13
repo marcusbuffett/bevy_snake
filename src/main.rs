@@ -182,7 +182,10 @@ fn game_over(
     food: Query<Entity, With<Food>>,
     segments: Query<Entity, With<SnakeSegment>>,
 ) {
+    // If the game is over, remove all entities and spawn a new snake
     if reader.iter().next().is_some() {
+        println!("Game Over!");
+        // Remove all entities
         for ent in food.iter().chain(segments.iter()) {
             commands.entity(ent).despawn();
         }
