@@ -50,6 +50,11 @@ struct SnakeSegments(Vec<Entity>);
 #[derive(Component)]
 struct Food;
 
+#[derive(Resource)]
+struct Scoreboard {
+    score: usize,
+}
+
 #[derive(PartialEq, Copy, Clone)]
 enum Direction {
     Left,
@@ -71,6 +76,40 @@ impl Direction {
 
 fn setup_camera(mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
+}
+
+fn setup_scoreboard(mut commands: Commands, asset_server: Res<AssetServer>) {
+    commands.spawn(
+        TextBundle::from_sections([
+            TextSection::new(
+                "Score: ",
+                TextStyle {
+                    font: asset_server.load("fonts/PixeloidSans.ttf"),
+                    font_size: 20.0,
+                    color: Color::rgb(1., 1., 1.),
+                },
+            ),
+            TextSection::from_style(TextStyle {
+                font: asset_server.load("fonts/PixeloidSans.ttf"),
+                font_size: 20.0,
+                color: Color::rgb(0.5, 1.0, 1.0),
+            }),
+        ])
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            position: UiRect {
+                top: Val::Px(5.0),
+                left: Val::Px(5.0),
+                ..default()
+            },
+            ..default()
+        }),
+    );
+}
+
+fn update_scoreboard(scoreboard: Res<Scoreboard>, mut query: Query<&mut Text>) {
+    let mut text = query.single_mut();
+    text.sections[1].value = scoreboard.score.to_string();
 }
 
 fn spawn_snake(mut commands: Commands, mut segments: ResMut<SnakeSegments>) {
@@ -175,20 +214,22 @@ fn snake_movement_input(keyboard_input: Res<Input<KeyCode>>, mut heads: Query<&m
     }
 }
 
-fn game_over(
+fn check_game_over(
     mut commands: Commands,
     mut reader: EventReader<GameOverEvent>,
     segments_res: ResMut<SnakeSegments>,
     food: Query<Entity, With<Food>>,
     segments: Query<Entity, With<SnakeSegment>>,
+    mut scoreboard: ResMut<Scoreboard>
 ) {
     // If the game is over, remove all entities and spawn a new snake
     if reader.iter().next().is_some() {
-        println!("Game Over!");
+        //println!("Game Over!");
         // Remove all entities
         for ent in food.iter().chain(segments.iter()) {
             commands.entity(ent).despawn();
         }
+        scoreboard.score = 0;
         spawn_snake(commands, segments_res);
     }
 }
@@ -198,12 +239,14 @@ fn snake_eating(
     mut growth_writer: EventWriter<GrowthEvent>,
     food_positions: Query<(Entity, &Position), With<Food>>,
     head_positions: Query<&Position, With<SnakeHead>>,
+    mut scoreboard: ResMut<Scoreboard>,
 ) {
     for head_pos in head_positions.iter() {
         for (ent, food_pos) in food_positions.iter() {
             if food_pos == head_pos {
                 commands.entity(ent).despawn();
                 growth_writer.send(GrowthEvent);
+                scoreboard.score += 1;
             }
         }
     }
@@ -272,7 +315,10 @@ fn food_spawner(mut commands: Commands) {
 
 fn main() {
     App::new()
+        // Background color
         .insert_resource(ClearColor(Color::rgb(0.04, 0.04, 0.04)))
+
+        // Window
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             window: WindowDescriptor {
                 title: "Snake!".to_string(),
@@ -283,13 +329,27 @@ fn main() {
             },
             ..default()
         }))
+
+        // Initialize scoreboard
+        .insert_resource(Scoreboard { score: 0 })
+
+        // Setup different systems
         .add_startup_system(setup_camera)
         .add_startup_system(spawn_snake)
+        .add_startup_system(setup_scoreboard)
+
+        // Setup snake segments
         .insert_resource(SnakeSegments::default())
         .insert_resource(LastTailPosition::default())
         .add_event::<GrowthEvent>()
+
+        // Setup movement
         .add_system(snake_movement_input.before(snake_movement))
+
+        // Setup game over event
         .add_event::<GameOverEvent>()
+
+        // Setup timestep for snake stuff
         .add_system_set(
             SystemSet::new()
                 .with_run_criteria(FixedTimestep::step(0.150))
@@ -297,17 +357,31 @@ fn main() {
                 .with_system(snake_eating.after(snake_movement))
                 .with_system(snake_growth.after(snake_eating)),
         )
-        .add_system(game_over.after(snake_movement))
+
+        // Setup game over after the snake has moved
+        .add_system(check_game_over.after(snake_movement))
+
+        // Setup food spawner
         .add_system_set(
             SystemSet::new()
                 .with_run_criteria(FixedTimestep::step(1.0))
                 .with_system(food_spawner),
         )
+
+        // Setup scaling
         .add_system_set_to_stage(
             CoreStage::PostUpdate,
             SystemSet::new()
                 .with_system(position_translation)
                 .with_system(size_scaling),
         )
+
+        // Setup scoreboard
+        .add_system(update_scoreboard)
+
+        // Close on escape
+        .add_system(bevy::window::close_on_esc)
+
+        // Run
         .run();
 }
