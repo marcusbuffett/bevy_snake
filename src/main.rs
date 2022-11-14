@@ -352,10 +352,10 @@ fn main() {
         // Setup timestep for snake stuff
         .add_system_set(
             SystemSet::new()
-                .with_run_criteria(FixedTimestep::step(0.150))
+                .with_run_criteria(FixedTimestep::step(1.0/6.0))
                 .with_system(snake_movement)
                 .with_system(snake_eating.after(snake_movement))
-                .with_system(snake_growth.after(snake_eating)),
+                .with_system(snake_growth.after(snake_eating))
         )
 
         // Setup game over after the snake has moved
@@ -365,7 +365,7 @@ fn main() {
         .add_system_set(
             SystemSet::new()
                 .with_run_criteria(FixedTimestep::step(1.0))
-                .with_system(food_spawner),
+                .with_system(food_spawner)
         )
 
         // Setup scaling
