@@ -1,9 +1,9 @@
 [package]
 name = "bevy_snake"
-version = "0.6.0"
-authors = ["Marcus Buffett <marcusbuffett@me.com>"]
+version = "0.7.0"
+authors = ["Marcus Buffett <marcusbuffett@me.com>", "ebudae" <aesedr.1@gmail.com>"]
 edition = "2021"
 
 [dependencies]
-bevy = "0.7.0"
-rand = "0.7.3"
+bevy = "0.10.0"
+rand = "0.8.5"
