@@ -1,4 +1,3 @@
-use bevy::core::FixedTimestep;
 use bevy::prelude::*;
 use rand::prelude::random;
 
@@ -37,17 +36,23 @@ struct SnakeHead {
 struct GameOverEvent;
 struct GrowthEvent;
 
-#[derive(Default)]
+#[derive(Default,Resource)]
 struct LastTailPosition(Option<Position>);
 
 #[derive(Component)]
 struct SnakeSegment;
 
-#[derive(Default, Deref, DerefMut)]
+#[derive(Default, Deref, DerefMut,Resource)]
 struct SnakeSegments(Vec<Entity>);
 
 #[derive(Component)]
 struct Food;
+
+#[derive(Resource)]
+struct FoodSpawnTimer(Timer);
+
+#[derive(Resource)]
+struct BTimer(Timer);
 
 #[derive(PartialEq, Copy, Clone)]
 enum Direction {
@@ -69,13 +74,13 @@ impl Direction {
 }
 
 fn setup_camera(mut commands: Commands) {
-    commands.spawn_bundle(OrthographicCameraBundle::new_2d());
+    commands.spawn(Camera2dBundle::default());
 }
 
 fn spawn_snake(mut commands: Commands, mut segments: ResMut<SnakeSegments>) {
     *segments = SnakeSegments(vec![
         commands
-            .spawn_bundle(SpriteBundle {
+            .spawn(SpriteBundle {
                 sprite: Sprite {
                     color: SNAKE_HEAD_COLOR,
                     ..default()
@@ -95,7 +100,7 @@ fn spawn_snake(mut commands: Commands, mut segments: ResMut<SnakeSegments>) {
 
 fn spawn_segment(mut commands: Commands, position: Position) -> Entity {
     commands
-        .spawn_bundle(SpriteBundle {
+        .spawn(SpriteBundle {
             sprite: Sprite {
                 color: SNAKE_SEGMENT_COLOR,
                 ..default()
@@ -109,12 +114,18 @@ fn spawn_segment(mut commands: Commands, position: Position) -> Entity {
 }
 
 fn snake_movement(
+    time: Res<Time>,
+    mut timer: ResMut<BTimer>,
     mut last_tail_position: ResMut<LastTailPosition>,
     mut game_over_writer: EventWriter<GameOverEvent>,
     segments: ResMut<SnakeSegments>,
     mut heads: Query<(Entity, &SnakeHead)>,
     mut positions: Query<&mut Position>,
 ) {
+
+    if !timer.0.tick(time.delta()).finished() {
+        return;
+    }
     if let Some((head_entity, head)) = heads.iter_mut().next() {
         let segment_positions = segments
             .iter()
@@ -155,7 +166,10 @@ fn snake_movement(
     }
 }
 
-fn snake_movement_input(keyboard_input: Res<Input<KeyCode>>, mut heads: Query<&mut SnakeHead>) {
+fn snake_movement_input(
+    keyboard_input: Res<Input<KeyCode>>,
+    mut heads: Query<&mut SnakeHead>) {
+    
     if let Some(mut head) = heads.iter_mut().next() {
         let dir: Direction = if keyboard_input.pressed(KeyCode::Left) {
             Direction::Left
@@ -216,8 +230,8 @@ fn snake_growth(
     }
 }
 
-fn size_scaling(windows: Res<Windows>, mut q: Query<(&Size, &mut Transform)>) {
-    let window = windows.get_primary().unwrap();
+fn size_scaling(primary_query: Query<&Window, With<bevy::window::PrimaryWindow>>, mut q: Query<(&Size, &mut Transform)>) {
+    let window = primary_query.get_single().unwrap();
     for (sprite_size, mut transform) in q.iter_mut() {
         transform.scale = Vec3::new(
             sprite_size.width / ARENA_WIDTH as f32 * window.width() as f32,
@@ -227,12 +241,12 @@ fn size_scaling(windows: Res<Windows>, mut q: Query<(&Size, &mut Transform)>) {
     }
 }
 
-fn position_translation(windows: Res<Windows>, mut q: Query<(&Position, &mut Transform)>) {
+fn position_translation(primary_query: Query<&Window, With<bevy::window::PrimaryWindow>>, mut q: Query<(&Position, &mut Transform)>) {
     fn convert(pos: f32, bound_window: f32, bound_game: f32) -> f32 {
         let tile_size = bound_window / bound_game;
         pos / bound_game * bound_window - (bound_window / 2.) + (tile_size / 2.)
     }
-    let window = windows.get_primary().unwrap();
+    let window = primary_query.get_single().unwrap();
     for (pos, mut transform) in q.iter_mut() {
         transform.translation = Vec3::new(
             convert(pos.x as f32, window.width() as f32, ARENA_WIDTH as f32),
@@ -242,9 +256,17 @@ fn position_translation(windows: Res<Windows>, mut q: Query<(&Position, &mut Tra
     }
 }
 
-fn food_spawner(mut commands: Commands) {
+fn food_spawner(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut timer: ResMut<FoodSpawnTimer>,
+    ) {
+    
+    if !timer.0.tick(time.delta()).finished() {
+        return;
+    }
     commands
-        .spawn_bundle(SpriteBundle {
+        .spawn(SpriteBundle {
             sprite: Sprite {
                 color: FOOD_COLOR,
                 ..default()
@@ -260,40 +282,36 @@ fn food_spawner(mut commands: Commands) {
 }
 
 fn main() {
+
     App::new()
         .insert_resource(ClearColor(Color::rgb(0.04, 0.04, 0.04)))
-        .insert_resource(WindowDescriptor {
-            title: "Snake!".to_string(),
-            width: 500.0,
-            height: 500.0,
-            ..default()
-        })
         .add_startup_system(setup_camera)
         .add_startup_system(spawn_snake)
         .insert_resource(SnakeSegments::default())
         .insert_resource(LastTailPosition::default())
         .add_event::<GrowthEvent>()
+        .insert_resource(BTimer(Timer::from_seconds(
+            0.15,
+            TimerMode::Repeating,
+        ))).insert_resource(FoodSpawnTimer(Timer::from_seconds(
+            1.0,
+            TimerMode::Repeating,
+        )))
         .add_system(snake_movement_input.before(snake_movement))
         .add_event::<GameOverEvent>()
-        .add_system_set(
-            SystemSet::new()
-                .with_run_criteria(FixedTimestep::step(0.150))
-                .with_system(snake_movement)
-                .with_system(snake_eating.after(snake_movement))
-                .with_system(snake_growth.after(snake_eating)),
-        )
+        .add_systems( ( snake_movement,snake_eating,snake_growth ).chain() )
         .add_system(game_over.after(snake_movement))
-        .add_system_set(
-            SystemSet::new()
-                .with_run_criteria(FixedTimestep::step(1.0))
-                .with_system(food_spawner),
+        .add_system( food_spawner.in_schedule(CoreSchedule::FixedUpdate) )
+        .add_systems( (position_translation,size_scaling).chain() )
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some( Window {
+                title: "Snake!".to_string(),
+                resolution: bevy::window::WindowResolution::new( 500.0, 500.0 ),
+            ..default()
+            }),
+            ..default()
+            }
         )
-        .add_system_set_to_stage(
-            CoreStage::PostUpdate,
-            SystemSet::new()
-                .with_system(position_translation)
-                .with_system(size_scaling),
         )
-        .add_plugins(DefaultPlugins)
         .run();
 }
