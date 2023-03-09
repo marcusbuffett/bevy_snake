@@ -1,7 +1,7 @@
 [package]
 name = "bevy_snake"
 version = "0.7.0"
-authors = ["Marcus Buffett <marcusbuffett@me.com>", "ebudae" <aesedr.1@gmail.com>"]
+authors = ["Marcus Buffett <marcusbuffett@me.com>"]
 edition = "2021"
 
 [dependencies]
