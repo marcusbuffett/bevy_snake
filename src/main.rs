@@ -1,13 +1,15 @@
-use bevy::core::FixedTimestep;
 use bevy::prelude::*;
-use rand::prelude::random;
+use bevy::time::common_conditions::on_timer;
+use bevy::window::PrimaryWindow;
+use core::time::Duration;
+use rand::Rng;
 
-const SNAKE_HEAD_COLOR: Color = Color::rgb(0.7, 0.7, 0.7);
-const FOOD_COLOR: Color = Color::rgb(1.0, 0.0, 1.0);
-const SNAKE_SEGMENT_COLOR: Color = Color::rgb(0.3, 0.3, 0.3);
+const SNAKE_HEAD_COLOR: Color = Color::srgb(0.7, 0.7, 0.7);
+const FOOD_COLOR: Color = Color::srgb(1.0, 0.0, 1.0);
+const SNAKE_SEGMENT_COLOR: Color = Color::srgb(0.3, 0.3, 0.3);
 
-const ARENA_HEIGHT: u32 = 10;
 const ARENA_WIDTH: u32 = 10;
+const ARENA_HEIGHT: u32 = 10;
 
 #[derive(Component, Clone, Copy, PartialEq, Eq)]
 struct Position {
@@ -34,16 +36,19 @@ struct SnakeHead {
     direction: Direction,
 }
 
+#[derive(Event)]
 struct GameOverEvent;
+
+#[derive(Event)]
 struct GrowthEvent;
 
-#[derive(Default)]
+#[derive(Resource)]
 struct LastTailPosition(Option<Position>);
 
 #[derive(Component)]
 struct SnakeSegment;
 
-#[derive(Default, Deref, DerefMut)]
+#[derive(Resource)]
 struct SnakeSegments(Vec<Entity>);
 
 #[derive(Component)]
@@ -69,17 +74,14 @@ impl Direction {
 }
 
 fn setup_camera(mut commands: Commands) {
-    commands.spawn_bundle(OrthographicCameraBundle::new_2d());
+    commands.spawn(Camera2d::default());
 }
 
 fn spawn_snake(mut commands: Commands, mut segments: ResMut<SnakeSegments>) {
     *segments = SnakeSegments(vec![
         commands
-            .spawn_bundle(SpriteBundle {
-                sprite: Sprite {
-                    color: SNAKE_HEAD_COLOR,
-                    ..default()
-                },
+            .spawn(Sprite {
+                color: SNAKE_HEAD_COLOR,
                 ..default()
             })
             .insert(SnakeHead {
@@ -95,11 +97,8 @@ fn spawn_snake(mut commands: Commands, mut segments: ResMut<SnakeSegments>) {
 
 fn spawn_segment(mut commands: Commands, position: Position) -> Entity {
     commands
-        .spawn_bundle(SpriteBundle {
-            sprite: Sprite {
-                color: SNAKE_SEGMENT_COLOR,
-                ..default()
-            },
+        .spawn(Sprite {
+            color: SNAKE_SEGMENT_COLOR,
             ..default()
         })
         .insert(SnakeSegment)
@@ -117,10 +116,13 @@ fn snake_movement(
 ) {
     if let Some((head_entity, head)) = heads.iter_mut().next() {
         let segment_positions = segments
+            .0
             .iter()
             .map(|e| *positions.get_mut(*e).unwrap())
             .collect::<Vec<Position>>();
+
         let mut head_pos = positions.get_mut(head_entity).unwrap();
+
         match &head.direction {
             Direction::Left => {
                 head_pos.x -= 1;
@@ -135,6 +137,7 @@ fn snake_movement(
                 head_pos.y -= 1;
             }
         };
+
         if head_pos.x < 0
             || head_pos.y < 0
             || head_pos.x as u32 >= ARENA_WIDTH
@@ -142,28 +145,34 @@ fn snake_movement(
         {
             game_over_writer.send(GameOverEvent);
         }
+
         if segment_positions.contains(&head_pos) {
             game_over_writer.send(GameOverEvent);
         }
+
         segment_positions
             .iter()
-            .zip(segments.iter().skip(1))
+            .zip(segments.0.iter().skip(1))
             .for_each(|(pos, segment)| {
                 *positions.get_mut(*segment).unwrap() = *pos;
             });
+
         *last_tail_position = LastTailPosition(Some(*segment_positions.last().unwrap()));
     }
 }
 
-fn snake_movement_input(keyboard_input: Res<Input<KeyCode>>, mut heads: Query<&mut SnakeHead>) {
+fn snake_movement_input(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut heads: Query<&mut SnakeHead>,
+) {
     if let Some(mut head) = heads.iter_mut().next() {
-        let dir: Direction = if keyboard_input.pressed(KeyCode::Left) {
+        let dir: Direction = if keyboard_input.pressed(KeyCode::ArrowLeft) {
             Direction::Left
-        } else if keyboard_input.pressed(KeyCode::Down) {
+        } else if keyboard_input.pressed(KeyCode::ArrowDown) {
             Direction::Down
-        } else if keyboard_input.pressed(KeyCode::Up) {
+        } else if keyboard_input.pressed(KeyCode::ArrowUp) {
             Direction::Up
-        } else if keyboard_input.pressed(KeyCode::Right) {
+        } else if keyboard_input.pressed(KeyCode::ArrowRight) {
             Direction::Right
         } else {
             head.direction
@@ -176,12 +185,12 @@ fn snake_movement_input(keyboard_input: Res<Input<KeyCode>>, mut heads: Query<&m
 
 fn game_over(
     mut commands: Commands,
-    mut reader: EventReader<GameOverEvent>,
+    mut game_over_events: EventReader<GameOverEvent>,
     segments_res: ResMut<SnakeSegments>,
     food: Query<Entity, With<Food>>,
     segments: Query<Entity, With<SnakeSegment>>,
 ) {
-    if reader.iter().next().is_some() {
+    if game_over_events.read().next().is_some() {
         for ent in food.iter().chain(segments.iter()) {
             commands.entity(ent).despawn();
         }
@@ -209,30 +218,39 @@ fn snake_growth(
     commands: Commands,
     last_tail_position: Res<LastTailPosition>,
     mut segments: ResMut<SnakeSegments>,
-    mut growth_reader: EventReader<GrowthEvent>,
+    mut growth_events: EventReader<GrowthEvent>,
 ) {
-    if growth_reader.iter().next().is_some() {
-        segments.push(spawn_segment(commands, last_tail_position.0.unwrap()));
+    if growth_events.read().next().is_some() {
+        segments
+            .0
+            .push(spawn_segment(commands, last_tail_position.0.unwrap()));
     }
 }
 
-fn size_scaling(windows: Res<Windows>, mut q: Query<(&Size, &mut Transform)>) {
-    let window = windows.get_primary().unwrap();
+fn size_scaling(
+    q_window: Query<&Window, With<PrimaryWindow>>,
+    mut q: Query<(&Size, &mut Transform)>,
+) {
+    let window = q_window.get_single().unwrap();
+
     for (sprite_size, mut transform) in q.iter_mut() {
         transform.scale = Vec3::new(
-            sprite_size.width / ARENA_WIDTH as f32 * window.width() as f32,
-            sprite_size.height / ARENA_HEIGHT as f32 * window.height() as f32,
+            sprite_size.width / ARENA_WIDTH as f32 * window.width(),
+            sprite_size.height / ARENA_HEIGHT as f32 * window.height(),
             1.0,
         );
     }
 }
 
-fn position_translation(windows: Res<Windows>, mut q: Query<(&Position, &mut Transform)>) {
+fn position_translation(
+    q_window: Query<&Window, With<PrimaryWindow>>,
+    mut q: Query<(&Position, &mut Transform)>,
+) {
     fn convert(pos: f32, bound_window: f32, bound_game: f32) -> f32 {
         let tile_size = bound_window / bound_game;
         pos / bound_game * bound_window - (bound_window / 2.) + (tile_size / 2.)
     }
-    let window = windows.get_primary().unwrap();
+    let window = q_window.get_single().unwrap();
     for (pos, mut transform) in q.iter_mut() {
         transform.translation = Vec3::new(
             convert(pos.x as f32, window.width() as f32, ARENA_WIDTH as f32),
@@ -242,58 +260,50 @@ fn position_translation(windows: Res<Windows>, mut q: Query<(&Position, &mut Tra
     }
 }
 
-fn food_spawner(mut commands: Commands) {
+fn spawn_food(mut commands: Commands) {
+    let mut rng = rand::rng();
+
     commands
-        .spawn_bundle(SpriteBundle {
-            sprite: Sprite {
-                color: FOOD_COLOR,
-                ..default()
-            },
+        .spawn(Sprite {
+            color: FOOD_COLOR,
             ..default()
         })
         .insert(Food)
         .insert(Position {
-            x: (random::<f32>() * ARENA_WIDTH as f32) as i32,
-            y: (random::<f32>() * ARENA_HEIGHT as f32) as i32,
+            x: rng.random_range(0..ARENA_WIDTH as i32),
+            y: rng.random_range(0..ARENA_HEIGHT as i32),
         })
         .insert(Size::square(0.8));
 }
 
 fn main() {
     App::new()
-        .insert_resource(ClearColor(Color::rgb(0.04, 0.04, 0.04)))
-        .insert_resource(WindowDescriptor {
-            title: "Snake!".to_string(),
-            width: 500.0,
-            height: 500.0,
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "Snake!".to_string(),
+                resolution: (500.0, 500.0).into(),
+                ..default()
+            }),
             ..default()
-        })
-        .add_startup_system(setup_camera)
-        .add_startup_system(spawn_snake)
-        .insert_resource(SnakeSegments::default())
-        .insert_resource(LastTailPosition::default())
+        }))
         .add_event::<GrowthEvent>()
-        .add_system(snake_movement_input.before(snake_movement))
         .add_event::<GameOverEvent>()
-        .add_system_set(
-            SystemSet::new()
-                .with_run_criteria(FixedTimestep::step(0.150))
-                .with_system(snake_movement)
-                .with_system(snake_eating.after(snake_movement))
-                .with_system(snake_growth.after(snake_eating)),
+        .insert_resource(ClearColor(Color::srgb(0.04, 0.04, 0.04)))
+        .insert_resource(SnakeSegments(Vec::new()))
+        .insert_resource(LastTailPosition(None))
+        .add_systems(Startup, setup_camera)
+        .add_systems(Startup, spawn_snake)
+        .add_systems(
+            Update,
+            (
+                snake_movement.run_if(on_timer(Duration::from_millis(150))),
+                snake_eating.after(snake_movement),
+                snake_growth.after(snake_eating),
+            ),
         )
-        .add_system(game_over.after(snake_movement))
-        .add_system_set(
-            SystemSet::new()
-                .with_run_criteria(FixedTimestep::step(1.0))
-                .with_system(food_spawner),
-        )
-        .add_system_set_to_stage(
-            CoreStage::PostUpdate,
-            SystemSet::new()
-                .with_system(position_translation)
-                .with_system(size_scaling),
-        )
-        .add_plugins(DefaultPlugins)
+        .add_systems(PostUpdate, (position_translation, size_scaling))
+        .add_systems(Update, spawn_food.run_if(on_timer(Duration::from_secs(1))))
+        .add_systems(Update, snake_movement_input.before(snake_movement))
+        .add_systems(Update, game_over.after(snake_movement))
         .run();
 }
